@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>מחשבון הזמנות</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f3f5f8;color:#202631;margin:0;padding:24px 12px}
+main{max-width:780px;margin:auto;background:white;padding:24px;border-radius:14px;box-shadow:0 4px 20px #0001}
+h1{font-size:25px;margin:0 0 8px}p{color:#56616f;line-height:1.5}
+.settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
+label{display:block;font-weight:bold;margin-bottom:7px}input,textarea{width:100%;border:1px solid #cbd2da;border-radius:8px;padding:11px;font:inherit}
+input{direction:ltr;text-align:right}textarea{min-height:180px;resize:vertical;line-height:1.6}
+button{border:0;border-radius:8px;background:#2468b4;color:white;padding:12px 20px;font:inherit;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}section{margin-top:20px}
+#status{color:#52606d;font-size:14px;margin-top:9px;min-height:20px}
+@media(max-width:480px){main{padding:18px}.settings{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<h1>מחשבון הזמנות</h1>
+<p>הדבק הזמנות ועדכן מחירים או מספר אנשים. הסיכום מתעדכן אוטומטית.</p>
+<div class="settings">
+<div><label for="halla">חלה שניצל (₪)</label><input id="halla" type="number" min="0" step=".01" value="45"></div>
+<div><label for="tray">חמגשית שניצל (₪)</label><input id="tray" type="number" min="0" step=".01" value="55"></div>
+<div><label for="chips">ציפס (₪)</label><input id="chips" type="number" min="0" step=".01" value="12"></div>
+<div><label for="shipping">משלוח (₪)</label><input id="shipping" type="number" min="0" step=".01" value="90"></div>
+<div><label for="people">מספר אנשים בפועל</label><input id="people" type="number" min="1" step="1" value="4"></div>
+</div>
+<section><label for="source">ההזמנות המקוריות</label>
+<textarea id="source" placeholder="שלמה - חלה שניצל עם מטבוחה&#10;יוסי - חמגשית שניצל&#10;אבנר - חלה עם ציפס"></textarea></section>
+<section><label for="result">הסיכום המוכן</label><textarea id="result" readonly placeholder="הסיכום יופיע כאן אוטומטית..."></textarea>
+<button id="copy" disabled>העתק סיכום</button><div id="status" role="status" aria-live="polite"></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const ids=['halla','tray','chips','shipping','people','source'];
+const fmt=n=>Number(n.toFixed(2)).toLocaleString('he-IL',{maximumFractionDigits:2});
+const shekel=n=>fmt(n)+' ₪';
+function update(){
+const source=$('source').value;
+const prices={halla:Number($('halla').value),tray:Number($('tray').value),chips:Number($('chips').value)};
+const shipping=Number($('shipping').value),people=Number($('people').value);
+const validPrices=['halla','tray','chips','shipping'].every(id=>$(id).value.trim()!==''&&Number.isFinite(Number($(id).value))&&Number($(id).value)>=0);
+if(!validPrices||$('people').value.trim()===''||!Number.isInteger(people)||people<1){
+$('result').value='';$('copy').disabled=true;$('status').textContent='יש להזין מחירים תקינים ומספר אנשים שלם וחיובי.';return;
+}
+const lines=source.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+let count={halla:0,tray:0,chips:0},orders=[],total=0;
+for(const line of lines){
+const split=line.search(/[-–—:]/);
+const name=split>=0?line.slice(0,split).trim():'ללא שם';
+const order=split>=0?line.slice(split+1):line;
+const items=[];let price=0;
+if(/חמגשית/.test(order)){items.push('חמגשית');count.tray++;price+=prices.tray}
+if(/חלה/.test(order)){items.push('חלה');count.halla++;price+=prices.halla}
+if(/צ[׳']?י?פס|צ'יפס|צ׳יפס/.test(order)){items.push('ציפס');count.chips++;price+=prices.chips}
+if(!items.length)continue;
+total+=price;
+orders.push(`${name||'ללא שם'} - ${items.join(' ')} | ${shekel(price)}`);
+}
+const share=shipping/people;
+const output=[
+`יש להוסיף ${shekel(share)} למשלוח לכל אדם (לא כלול במחירי ההזמנות)`,
+'',
+...orders,'',
+'מחירי מוצרים:',
+`חלה שניצל: ${shekel(prices.halla)}`,
+`חמגשית שניצל: ${shekel(prices.tray)}`,
+`ציפס: ${shekel(prices.chips)}`,'',
+'סיכום כמויות:',
+`חלה שניצל: ${count.halla}`,
+`חמגשית שניצל: ${count.tray}`,
+`ציפס: ${count.chips}`,
+`סה"כ מוצרים: ${count.halla+count.tray+count.chips}`,
+`סה"כ הזמנות: ${orders.length}`,
+`מספר אנשים בפועל: ${people}`,'',
+`סה"כ לתשלום: ${shekel(total)}`,
+`משלוח: ${shekel(shipping)}`,
+`חלקו של כל אדם במשלוח: ${shekel(share)}`,
+`סה"כ כולל משלוח: ${shekel(total+shipping)}`
+];
+$('result').value=source.trim()?output.join('\n'):'';
+$('copy').disabled=!$('result').value;
+$('status').textContent=source.trim()?`זוהו ${orders.length} הזמנות. המשלוח מחולק בין ${people} אנשים.`:'';
+}
+ids.forEach(id=>$(id).addEventListener('input',update));
+$('copy').addEventListener('click',async()=>{
+const el=$('result'),text=el.value;if(!text)return;
+try{
+if(!navigator.clipboard?.writeText)throw new Error('clipboard unavailable');
+await navigator.clipboard.writeText(text);
+$('status').textContent='הסיכום הועתק בהצלחה.';return;
+}catch(e){}
+try{
+el.removeAttribute('readonly');el.focus();el.select();el.setSelectionRange(0,text.length);
+const ok=document.execCommand('copy');
+el.setAttribute('readonly','');
+if(ok){$('status').textContent='הסיכום הועתק בהצלחה.';return}
+}catch(e){el.setAttribute('readonly','')}
+el.focus();el.select();el.setSelectionRange(0,text.length);
+$('status').textContent='הטקסט סומן. יש לבחור העתק בתפריט הבחירה של הטלפון.';
+});
+update();
+</script></body></html>
